@@ -4,7 +4,6 @@ import "google/protobuf/empty.proto";
 
 service Registry {
     rpc RegisterNode(ConnectionAddr) returns (RegisterInfo);
-    rpc QueryDHT(Query) returns (QueryResult);
 }
 
 message ConnectionAddr {
@@ -19,21 +18,4 @@ message Node {
 message RegisterInfo {
     uint64 id = 1;
     optional Node neighbor = 2;
-}
-
-enum OperationType {
-  Get = 0;
-  Delete = 1;
-  Set = 2;
-}
-
-message Query {
-  OperationType ty = 1;
-  uint64 key = 2;
-  optional bytes value = 3;
-}
-
-message QueryResult {
-    optional string error = 1;
-    optional bytes value = 2;
 }

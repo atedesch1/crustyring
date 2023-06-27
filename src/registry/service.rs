@@ -1,12 +1,9 @@
 use std::sync::Arc;
-
-use crate::error::Result;
-
 use tonic::{Request, Response, Status};
 
 use super::manager::Manager;
 use super::rpc::registry_server::Registry;
-use super::rpc::{ConnectionAddr, Node, OperationType, Query, QueryResult, RegisterInfo};
+use super::rpc::{ConnectionAddr, Node, RegisterInfo};
 
 #[derive(Debug)]
 pub struct RegistryService {
@@ -35,9 +32,5 @@ impl Registry for RegistryService {
 
 
         Ok(Response::new(RegisterInfo { id, neighbor }))
-    }
-
-    async fn query_dht(&self, request: Request<Query>) -> std::result::Result<Response<QueryResult>, Status> {
-        todo!()
     }
 }
