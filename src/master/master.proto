@@ -1,0 +1,35 @@
+syntax = "proto3";
+package master;
+import "google/protobuf/empty.proto";
+
+service MasterNode {
+    rpc RegisterNode(google.protobuf.Empty) returns (RegisterInfo);
+    rpc QueryDHT(Query) returns (QueryResult);
+}
+
+message Node {
+    uint64 id = 1;
+    uint32 port = 2;
+}
+
+message RegisterInfo {
+    uint64 id = 1;
+    Node neighbor = 2;
+}
+
+enum OperationType {
+  Get = 0;
+  Delete = 1;
+  Set = 2;
+}
+
+message Query {
+  OperationType ty = 1;
+  uint64 key = 2;
+  optional bytes value = 3;
+}
+
+message QueryResult {
+    optional string error = 1;
+    optional bytes value = 2;
+}
