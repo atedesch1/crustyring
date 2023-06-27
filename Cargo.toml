@@ -5,8 +5,8 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "master"
-path = "./src/master/main.rs"
+name = "registry"
+path = "./src/registry/server/main.rs"
 
 [[bin]]
 name = "node"

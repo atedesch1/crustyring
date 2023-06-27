@@ -1,20 +1,24 @@
 syntax = "proto3";
-package master;
+package registry;
 import "google/protobuf/empty.proto";
 
-service MasterNode {
-    rpc RegisterNode(google.protobuf.Empty) returns (RegisterInfo);
+service Registry {
+    rpc RegisterNode(ConnectionAddr) returns (RegisterInfo);
     rpc QueryDHT(Query) returns (QueryResult);
+}
+
+message ConnectionAddr {
+    string addr = 1;
 }
 
 message Node {
     uint64 id = 1;
-    uint32 port = 2;
+    string addr = 2;
 }
 
 message RegisterInfo {
     uint64 id = 1;
-    Node neighbor = 2;
+    optional Node neighbor = 2;
 }
 
 enum OperationType {
