@@ -2,7 +2,7 @@ use crate::error::Result;
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub fn generate_id_hash(id: u64) -> Result<u64> {
+pub fn generate_id_hash(id: &str) -> Result<u64> {
     let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?;
     let salt = current_time.as_nanos().to_string();
     let salted_id = format!("{}_{}", id, salt);
@@ -34,9 +34,9 @@ fn test_generate_hash64() -> Result<()> {
 
 #[test]
 fn test_generate_id_hash() -> Result<()> {
-    let id: u64 = 69;
-    let hash = generate_id_hash(id)?;
-    let hash_retry = generate_id_hash(id)?;
+    let id = "69".to_owned();
+    let hash = generate_id_hash(&id)?;
+    let hash_retry = generate_id_hash(&id)?;
 
     assert_ne!(hash, hash_retry);
     Ok(())
