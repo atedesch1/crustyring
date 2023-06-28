@@ -9,8 +9,8 @@ name = "registry"
 path = "./src/registry/server/main.rs"
 
 [[bin]]
-name = "node"
-path = "./src/node/main.rs"
+name = "dht"
+path = "./src/dht/server/main.rs"
 
 [dependencies]
 tempdir = "0.3"

@@ -1,0 +1,42 @@
+syntax = "proto3";
+package dht;
+import "google/protobuf/empty.proto";
+import "registry.proto";
+
+service DhtNode {
+    rpc RegisterAsNeighbor(NeighborRegisterInfo) returns (PreviousNeighbors);
+
+    rpc QueryDht(Query) returns (QueryResult);
+}
+
+enum NeighborType {
+    Previous = 0;
+    Next = 1;
+}
+
+message NeighborRegisterInfo {
+    NeighborType ty = 1;
+    registry.Node node = 2;
+}
+
+message PreviousNeighbors {
+    optional registry.Node prev = 1;
+    optional registry.Node next = 2;
+}
+
+enum OperationType {
+  Get = 0;
+  Delete = 1;
+  Set = 2;
+}
+
+message Query {
+  OperationType ty = 1;
+  uint64 key = 2;
+  optional bytes value = 3;
+}
+
+message QueryResult {
+    optional string error = 1;
+    optional bytes value = 2;
+}

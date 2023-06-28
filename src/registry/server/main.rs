@@ -1,17 +1,17 @@
 use crustyring::{
     error::Result,
-    registry::{rpc::registry_server::RegistryServer, service::RegistryService},
+    registry::{service::RegistryService, REGISTRY_ADDR},
+    rpc::registry::registry_server::RegistryServer,
 };
 use tonic::transport::Server;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let addr = "[::1]:50000".parse()?;
     let service = RegistryService::new();
 
     Server::builder()
         .add_service(RegistryServer::new(service))
-        .serve(addr)
+        .serve(REGISTRY_ADDR)
         .await?;
 
     Ok(())

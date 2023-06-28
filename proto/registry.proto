@@ -1,6 +1,5 @@
 syntax = "proto3";
 package registry;
-import "google/protobuf/empty.proto";
 
 service Registry {
     rpc RegisterNode(ConnectionAddr) returns (RegisterInfo);
