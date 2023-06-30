@@ -16,5 +16,5 @@ message Node {
 
 message RegisterInfo {
     uint64 id = 1;
-    optional Node neighbor = 2;
+    Node neighbor = 2;
 }

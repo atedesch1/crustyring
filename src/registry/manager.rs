@@ -9,7 +9,9 @@ pub struct Manager {
 
 impl Manager {
     pub fn new() -> Self {
-        Manager { nodes: Mutex::new(Vec::new()) }
+        Manager {
+            nodes: Mutex::new(Vec::new()),
+        }
     }
 
     pub fn register_node(&self, addr: String) -> Result<u64> {
@@ -36,7 +38,7 @@ impl Manager {
                 id - node.id
             };
 
-            if distance < smallest_distance {
+            if node.id != id && distance < smallest_distance {
                 smallest_distance = distance;
                 result = Some(node.clone());
             }

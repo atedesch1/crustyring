@@ -26,6 +26,8 @@ impl Registry for RegistryService {
     ) -> std::result::Result<Response<RegisterInfo>, Status> {
         let conn_addr = &request.get_ref().addr;
         let id = self.manager.register_node(conn_addr.to_owned())?;
+        println!("Registered addr: {} as #{}", conn_addr, id);
+
         let neighbor = self.manager.find_closest_neighbor(id)?.map(|node| Node {
             id: node.id,
             addr: node.addr,

@@ -4,9 +4,8 @@ import "google/protobuf/empty.proto";
 import "registry.proto";
 
 service DhtNode {
-    rpc RegisterAsNeighbor(NeighborRegisterInfo) returns (PreviousNeighbors);
-
     rpc QueryDht(Query) returns (QueryResult);
+    rpc RegisterAsNeighbor(NeighborRegisterInfo) returns (PreviousNeighbors);
 }
 
 enum NeighborType {
@@ -16,12 +15,13 @@ enum NeighborType {
 
 message NeighborRegisterInfo {
     NeighborType ty = 1;
-    registry.Node node = 2;
+    uint64 id = 2;
+    string addr = 3;
 }
 
 message PreviousNeighbors {
-    optional registry.Node prev = 1;
-    optional registry.Node next = 2;
+    registry.Node prev = 1;
+    registry.Node next = 2;
 }
 
 enum OperationType {

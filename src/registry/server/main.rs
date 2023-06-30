@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use crustyring::{
     error::Result,
     registry::{service::RegistryService, REGISTRY_ADDR},
@@ -9,9 +11,12 @@ use tonic::transport::Server;
 async fn main() -> Result<()> {
     let service = RegistryService::new();
 
+    let addr: SocketAddr = REGISTRY_ADDR.to_owned().parse()?;
+    println!("Running registry on {}", addr);
+
     Server::builder()
         .add_service(RegistryServer::new(service))
-        .serve(REGISTRY_ADDR)
+        .serve(addr)
         .await?;
 
     Ok(())

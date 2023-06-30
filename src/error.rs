@@ -1,6 +1,8 @@
 use std::{
+    array::TryFromSliceError,
     fmt::{self, Display},
-    net::AddrParseError, array::TryFromSliceError, time::SystemTimeError,
+    net::AddrParseError,
+    time::SystemTimeError,
 };
 
 /// Result returning Error
