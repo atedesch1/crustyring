@@ -55,8 +55,8 @@ impl DhtNodeService {
         println!("Registered as #{}", node.id);
 
         let neighbors = Arc::new(NeighborConnections {
-            prev_node: Mutex::new(None),
-            next_node: Mutex::new(None),
+            prev: Mutex::new(None),
+            next: Mutex::new(None),
         });
 
         if let Some(neighbor) = node_info.neighbor {
@@ -150,8 +150,8 @@ impl DhtNodeService {
             }))
             .await?;
         let mut guard = match ty {
-            NeighborType::Previous => neighbors.prev_node.lock().await,
-            NeighborType::Next => neighbors.next_node.lock().await,
+            NeighborType::Previous => neighbors.prev.lock().await,
+            NeighborType::Next => neighbors.next.lock().await,
         };
         *guard = Some(Neighbor {
             id: neighbor.id,
@@ -164,8 +164,8 @@ impl DhtNodeService {
 
     pub async fn switch_neighbor(&self, info: &NeighborRegisterInfo) -> Result<()> {
         let neighbor = match NeighborType::from_i32(info.ty).unwrap() {
-            NeighborType::Previous => &self.neighbors.prev_node,
-            NeighborType::Next => &self.neighbors.next_node,
+            NeighborType::Previous => &self.neighbors.prev,
+            NeighborType::Next => &self.neighbors.next,
         };
 
         let client = DhtNodeService::try_connect_node(&info.addr).await?;
@@ -198,8 +198,8 @@ impl DhtNode for DhtNodeService {
         let register_info = request.into_inner();
 
         let previous_neighbors = PreviousNeighbors {
-            prev: DhtNodeService::get_node_info(&self.neighbors.prev_node).await,
-            next: DhtNodeService::get_node_info(&self.neighbors.next_node).await,
+            prev: DhtNodeService::get_node_info(&self.neighbors.prev).await,
+            next: DhtNodeService::get_node_info(&self.neighbors.next).await,
         };
 
         self.switch_neighbor(&register_info).await?;
