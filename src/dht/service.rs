@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::error::{Error, Result};
 use crate::registry::REGISTRY_ADDR;
 use crate::rpc::registry::{ConnectionAddr, Node};
+use crate::HashRing;
 
 use tokio::sync::Mutex;
 use tonic::transport::Channel;
@@ -16,6 +17,8 @@ use crate::rpc::dht::{
     NeighborRegisterInfo, NeighborType, OperationType, PreviousNeighbors, Query, QueryResult,
 };
 
+use super::store::Store;
+
 #[derive(Debug)]
 pub struct Neighbor {
     id: u64,
@@ -25,8 +28,8 @@ pub struct Neighbor {
 
 #[derive(Debug)]
 pub struct NeighborConnections {
-    prev_node: Mutex<Option<Neighbor>>,
-    next_node: Mutex<Option<Neighbor>>,
+    prev: Mutex<Option<Neighbor>>,
+    next: Mutex<Option<Neighbor>>,
 }
 
 #[derive(Debug)]
@@ -34,6 +37,7 @@ pub struct DhtNodeService {
     id: u64,
     addr: String,
 
+    store: Store,
     neighbors: Arc<NeighborConnections>,
 
     registry: RegistryClient<Channel>,
@@ -67,9 +71,12 @@ impl DhtNodeService {
             ));
         }
 
+        let store = Store::new();
+
         Ok(DhtNodeService {
             id: node.id,
             addr: node.addr,
+            store,
             neighbors,
             registry,
         })
@@ -141,7 +148,10 @@ impl DhtNodeService {
         println!("Connecting to #{}", neighbor.id);
         let mut client = Self::try_connect_node(&neighbor.addr).await?;
 
-        println!("Registering as next on #{}", neighbor.id);
+        match ty {
+            NeighborType::Next => println!("Registering as next on #{}", neighbor.id),
+            NeighborType::Previous => println!("Registering as prev on #{}", neighbor.id),
+        };
         let previous_neighbors = client
             .register_as_neighbor(Request::new(NeighborRegisterInfo {
                 ty: ty.into(),
@@ -150,8 +160,8 @@ impl DhtNodeService {
             }))
             .await?;
         let mut guard = match ty {
-            NeighborType::Previous => neighbors.prev.lock().await,
-            NeighborType::Next => neighbors.next.lock().await,
+            NeighborType::Next => neighbors.prev.lock().await,
+            NeighborType::Previous => neighbors.next.lock().await,
         };
         *guard = Some(Neighbor {
             id: neighbor.id,
@@ -187,6 +197,28 @@ impl DhtNodeService {
 
         Ok(())
     }
+
+    pub async fn execute_query(&self, query: &Query) -> Result<Option<Vec<u8>>> {
+        let key = query.key.to_be_bytes();
+        let ty = OperationType::from_i32(query.ty).unwrap();
+        match ty {
+            OperationType::Set => Ok(self.store.set(&key, &query.value.clone().unwrap()).await),
+            OperationType::Get => {
+                let result = self.store.get(&key).await;
+                if let None = result {
+                    return Err(Error::Value("Key not present in database.".to_string()));
+                }
+                Ok(result)
+            }
+            OperationType::Delete => {
+                let result = self.store.delete(&key).await;
+                if let None = result {
+                    return Err(Error::Value("Key not present in database.".to_string()));
+                }
+                Ok(result)
+            }
+        }
+    }
 }
 
 #[tonic::async_trait]
@@ -211,6 +243,40 @@ impl DhtNode for DhtNodeService {
         &self,
         request: Request<Query>,
     ) -> std::result::Result<Response<QueryResult>, Status> {
-        todo!()
+        let req = request.get_ref();
+
+        let key = req.key;
+
+        println!("Got request for key {}", key);
+
+        if let Some(next_neighbor) = self.neighbors.next.lock().await.as_mut() {
+            if !((self.id < next_neighbor.id && (self.id <= key && key < next_neighbor.id))
+                || (self.id > next_neighbor.id && (self.id <= key || key < next_neighbor.id)))
+            {
+                let mut prev_neighbor = self.neighbors.prev.lock().await;
+                let prev_neighbor = prev_neighbor.as_mut().ok_or(Error::Internal(format!(
+                    "Missing previous neighbor on node {}.",
+                    self.id
+                )))?;
+
+                if HashRing::distance(key, next_neighbor.id)
+                    < HashRing::distance(key, prev_neighbor.id)
+                {
+                    println!("Forwarding request for key {} to {}", key, next_neighbor.id);
+                    return next_neighbor.client.query_dht(request).await;
+                }
+                println!("Forwarding request for key {} to {}", key, prev_neighbor.id);
+                return prev_neighbor.client.query_dht(request).await;
+            }
+        }
+
+        println!("Fulfilling request for key {}", key);
+        let result = self.execute_query(&req).await;
+        let query_result = QueryResult {
+            value: result.clone().ok().flatten(),
+            error: result.err().map(|e| e.to_string()),
+        };
+
+        Ok(Response::new(query_result))
     }
 }
