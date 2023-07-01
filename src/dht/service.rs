@@ -201,20 +201,26 @@ impl DhtNodeService {
         let key = query.key.to_be_bytes();
         let ty = OperationType::from_i32(query.ty).unwrap();
         match ty {
-            OperationType::Set => Ok(self.store.set(&key, &query.value.clone().unwrap()).await),
+            OperationType::Set => {
+                let value = query.value.clone();
+                match value {
+                    None => Err(Error::Value("Value not provided.".to_string())),
+                    Some(value) => Ok(self.store.set(&key, &value).await),
+                }
+            }
             OperationType::Get => {
                 let result = self.store.get(&key).await;
-                if let None = result {
-                    return Err(Error::Value("Key not present in database.".to_string()));
+                match result {
+                    None => Err(Error::Value("Key not present in database.".to_string())),
+                    Some(_) => Ok(result),
                 }
-                Ok(result)
             }
             OperationType::Delete => {
                 let result = self.store.delete(&key).await;
-                if let None = result {
-                    return Err(Error::Value("Key not present in database.".to_string()));
+                match result {
+                    None => Err(Error::Value("Key not present in database.".to_string())),
+                    Some(_) => Ok(result),
                 }
-                Ok(result)
             }
         }
     }
