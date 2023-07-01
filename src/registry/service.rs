@@ -1,3 +1,4 @@
+use log::info;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -25,8 +26,11 @@ impl Registry for RegistryService {
         request: Request<ConnectionAddr>,
     ) -> std::result::Result<Response<RegisterInfo>, Status> {
         let conn_addr = &request.get_ref().addr;
+        info!("Received join request from address {}", conn_addr);
+
+        info!("Registering node on address {}", conn_addr);
         let id = self.manager.register_node(conn_addr.to_owned())?;
-        println!("Registered addr: {} as #{}", conn_addr, id);
+        info!("Registered {} as #{:x}", conn_addr, id);
 
         let neighbor = self.manager.find_closest_neighbor(id)?.map(|node| Node {
             id: node.id,

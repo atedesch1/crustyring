@@ -5,6 +5,7 @@ use crate::registry::REGISTRY_ADDR;
 use crate::rpc::registry::{ConnectionAddr, Node};
 use crate::HashRing;
 
+use log::{info, warn};
 use tokio::sync::RwLock;
 use tonic::transport::Channel;
 use tonic::{Request, Response, Status};
@@ -46,17 +47,17 @@ pub struct DhtNodeService {
 impl DhtNodeService {
     pub async fn new(addr: String) -> Result<Self> {
         let mut registry = Self::try_connect_registry().await?;
+
+        info!("Registering on registry...");
         let node_info = registry
             .register_node(Request::new(ConnectionAddr { addr: addr.clone() }))
             .await?;
         let node_info = node_info.get_ref().clone();
-
         let node = Node {
             id: node_info.id,
             addr: addr.clone(),
         };
-
-        println!("Registered as #{}", node.id);
+        info!("Registered as #{:x}", node.id);
 
         let neighbors = Arc::new(NeighborConnections {
             prev: RwLock::new(None),
@@ -83,37 +84,43 @@ impl DhtNodeService {
     }
 
     async fn try_connect_registry() -> Result<RegistryClient<Channel>> {
+        info!("Connecting to registry...");
         for attempt in 1..=5 {
             match RegistryClient::connect("http://".to_owned() + REGISTRY_ADDR).await {
                 Ok(client) => {
+                    info!("Connected to registry.");
                     return Ok(client);
                 }
                 Err(_) => {
-                    println!("Registry client: connection to registry attempt {} failed. Retrying in 5 seconds...", attempt);
+                    warn!(
+                        "Connection to registry attempt {} failed. Retrying in 5 seconds...",
+                        attempt
+                    );
                     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                 }
             }
         }
-        Err(Error::Internal(
-            "Registry client: connection to registry failed".into(),
-        ))
+        Err(Error::Internal("Connection to registry failed.".into()))
     }
 
-    async fn try_connect_node(addr: &str) -> Result<DhtNodeClient<Channel>> {
+    async fn try_connect_node(node: &Node) -> Result<DhtNodeClient<Channel>> {
+        info!("Connecting to node #{:x}...", node.id);
         for attempt in 1..=5 {
-            match DhtNodeClient::connect("http://".to_owned() + addr).await {
+            match DhtNodeClient::connect("http://".to_owned() + &node.addr).await {
                 Ok(client) => {
+                    info!("Connected to node #{:x}.", node.id);
                     return Ok(client);
                 }
                 Err(_) => {
-                    println!("Node client: connection to node attempt {} failed. Retrying in 5 seconds...", attempt);
+                    println!(
+                        "Connection to node attempt {} failed. Retrying in 5 seconds...",
+                        attempt
+                    );
                     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                 }
             }
         }
-        Err(Error::Internal(
-            "Node client: connection to node failed".into(),
-        ))
+        Err(Error::Internal("Connection to node failed.".into()))
     }
 
     pub async fn get_node_info(node: &RwLock<Option<Neighbor>>) -> Option<Node> {
@@ -135,7 +142,7 @@ impl DhtNodeService {
         let next_neighbor = previous_neighbors.next.unwrap_or(prev_neighbor);
         let _ =
             Self::register_on_neighbor(&node, &neighbors, &next_neighbor, NeighborType::Previous)
-                .await;
+                .await?;
         Ok(())
     }
 
@@ -145,13 +152,16 @@ impl DhtNodeService {
         neighbor: &Node,
         ty: NeighborType,
     ) -> Result<PreviousNeighbors> {
-        println!("Connecting to #{}", neighbor.id);
-        let mut client = Self::try_connect_node(&neighbor.addr).await?;
+        let mut client = Self::try_connect_node(neighbor).await?;
 
-        match ty {
-            NeighborType::Next => println!("Registering as next on #{}", neighbor.id),
-            NeighborType::Previous => println!("Registering as prev on #{}", neighbor.id),
-        };
+        info!(
+            "Registering as {} on #{:x}...",
+            match ty {
+                NeighborType::Next => "next",
+                NeighborType::Previous => "previous",
+            },
+            neighbor.id
+        );
         let previous_neighbors = client
             .register_as_neighbor(Request::new(NeighborRegisterInfo {
                 ty: ty.into(),
@@ -159,6 +169,7 @@ impl DhtNodeService {
                 addr: node.addr.clone(),
             }))
             .await?;
+
         let mut guard = match ty {
             NeighborType::Next => neighbors.prev.write().await,
             NeighborType::Previous => neighbors.next.write().await,
@@ -169,56 +180,71 @@ impl DhtNodeService {
             client,
         });
 
+        info!("Registered on #{:x}", neighbor.id);
+
         Ok(previous_neighbors.get_ref().clone())
     }
 
     pub async fn switch_neighbor(&self, info: &NeighborRegisterInfo) -> Result<()> {
-        let neighbor = match NeighborType::from_i32(info.ty).unwrap() {
+        let ty = NeighborType::from_i32(info.ty).ok_or(Error::Internal(format!(
+            "Neighbor type {} is not valid",
+            info.ty
+        )))?;
+        let neighbor = match ty {
             NeighborType::Previous => &self.neighbors.prev,
             NeighborType::Next => &self.neighbors.next,
         };
 
-        let client = DhtNodeService::try_connect_node(&info.addr).await?;
+        let client = DhtNodeService::try_connect_node(&Node {
+            id: info.id,
+            addr: info.addr.clone(),
+        })
+        .await?;
         let mut neighbor = neighbor.write().await;
-        if let Some(node) = neighbor.as_ref() {
-            match NeighborType::from_i32(info.ty).unwrap() {
-                NeighborType::Previous => {
-                    println!("Replacing prev #{} with #{}", node.id, info.id)
-                }
-                NeighborType::Next => println!("Replacing next #{} with #{}", node.id, info.id),
-            }
-        }
         *neighbor = Some(Neighbor {
             id: info.id,
             addr: info.addr.clone(),
             client,
         });
 
+        info!(
+            "Replaced {} neighbor with #{:x}",
+            {
+                match ty {
+                    NeighborType::Previous => "previous",
+                    NeighborType::Next => "next",
+                }
+            },
+            info.id
+        );
+
         Ok(())
     }
 
     pub async fn execute_query(&self, query: &Query) -> Result<Option<Vec<u8>>> {
         let key = query.key.to_be_bytes();
-        let ty = OperationType::from_i32(query.ty).unwrap();
-        match ty {
+
+        info!("Executing query for key {:x}.", query.key);
+
+        match OperationType::from_i32(query.ty).unwrap() {
             OperationType::Set => {
                 let value = query.value.clone();
                 match value {
-                    None => Err(Error::Value("Value not provided.".to_string())),
+                    None => Err(Error::Value("Value not provided.".into())),
                     Some(value) => Ok(self.store.set(&key, &value).await),
                 }
             }
             OperationType::Get => {
                 let result = self.store.get(&key).await;
                 match result {
-                    None => Err(Error::Value("Key not present in database.".to_string())),
+                    None => Err(Error::Value("Key not present in database.".into())),
                     Some(_) => Ok(result),
                 }
             }
             OperationType::Delete => {
                 let result = self.store.delete(&key).await;
                 match result {
-                    None => Err(Error::Value("Key not present in database.".to_string())),
+                    None => Err(Error::Value("Key not present in database.".into())),
                     Some(_) => Ok(result),
                 }
             }
@@ -252,7 +278,7 @@ impl DhtNode for DhtNodeService {
 
         let key = req.key;
 
-        println!("Got request for key {}", key);
+        info!("Received request for key {:x}", key);
 
         let next_neighbor = self.neighbors.next.read().await;
 
@@ -265,7 +291,6 @@ impl DhtNode for DhtNodeService {
         };
 
         if is_node_key {
-            println!("Fulfilling request for key {}", key);
             let result = self.execute_query(&req).await;
             let query_result = QueryResult {
                 value: result.clone().ok().flatten(),
@@ -276,13 +301,13 @@ impl DhtNode for DhtNodeService {
         }
 
         let next_neighbor = next_neighbor.as_ref().ok_or(Error::Internal(format!(
-            "Missing next neighbor on node {}.",
+            "Missing next neighbor on node {:x}.",
             self.id
         )))?;
 
         let prev_neighbor = self.neighbors.prev.read().await;
         let prev_neighbor = prev_neighbor.as_ref().ok_or(Error::Internal(format!(
-            "Missing previous neighbor on node {}.",
+            "Missing previous neighbor on node {:x}.",
             self.id
         )))?;
 
@@ -294,8 +319,8 @@ impl DhtNode for DhtNodeService {
             prev_neighbor
         };
 
-        println!(
-            "Forwarding request for key {} to {}",
+        info!(
+            "Forwarding request for key {} to #{:x}",
             key, forwarding_neighbor.id
         );
         forwarding_neighbor.client.clone().query_dht(request).await

@@ -1,5 +1,7 @@
 use std::sync::Mutex;
 
+use log::info;
+
 use crate::{error::Result, hash, HashRing, NodeInfo};
 
 #[derive(Debug)]
