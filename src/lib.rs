@@ -30,7 +30,7 @@ impl HashRing {
         std::cmp::min(bigger - smaller, (u64::MAX - bigger) + smaller)
     }
 
-    pub fn counter_clowise_distance(a: u64, b: u64) -> u64 {
+    pub fn counter_clockwise_distance(a: u64, b: u64) -> u64 {
         if a > b {
             a - b
         } else {

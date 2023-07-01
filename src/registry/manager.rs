@@ -34,7 +34,7 @@ impl Manager {
         let nodes = self.nodes.lock()?;
 
         for node in nodes.as_slice() {
-            let distance = HashRing::counter_clowise_distance(id, node.id);
+            let distance = HashRing::counter_clockwise_distance(id, node.id);
             if node.id != id && distance < smallest_distance {
                 smallest_distance = distance;
                 result = Some(node.clone());
