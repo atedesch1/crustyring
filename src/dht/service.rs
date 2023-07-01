@@ -5,7 +5,7 @@ use crate::registry::REGISTRY_ADDR;
 use crate::rpc::registry::{ConnectionAddr, Node};
 use crate::HashRing;
 
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tonic::transport::Channel;
 use tonic::{Request, Response, Status};
 
@@ -28,8 +28,8 @@ pub struct Neighbor {
 
 #[derive(Debug)]
 pub struct NeighborConnections {
-    prev: Mutex<Option<Neighbor>>,
-    next: Mutex<Option<Neighbor>>,
+    prev: RwLock<Option<Neighbor>>,
+    next: RwLock<Option<Neighbor>>,
 }
 
 #[derive(Debug)]
@@ -59,8 +59,8 @@ impl DhtNodeService {
         println!("Registered as #{}", node.id);
 
         let neighbors = Arc::new(NeighborConnections {
-            prev: Mutex::new(None),
-            next: Mutex::new(None),
+            prev: RwLock::new(None),
+            next: RwLock::new(None),
         });
 
         if let Some(neighbor) = node_info.neighbor {
@@ -116,8 +116,8 @@ impl DhtNodeService {
         ))
     }
 
-    pub async fn get_node_info(node: &Mutex<Option<Neighbor>>) -> Option<Node> {
-        let node = node.lock().await;
+    pub async fn get_node_info(node: &RwLock<Option<Neighbor>>) -> Option<Node> {
+        let node = node.read().await;
         node.as_ref().map(|n| Node {
             id: n.id,
             addr: n.addr.clone(),
@@ -160,8 +160,8 @@ impl DhtNodeService {
             }))
             .await?;
         let mut guard = match ty {
-            NeighborType::Next => neighbors.prev.lock().await,
-            NeighborType::Previous => neighbors.next.lock().await,
+            NeighborType::Next => neighbors.prev.write().await,
+            NeighborType::Previous => neighbors.next.write().await,
         };
         *guard = Some(Neighbor {
             id: neighbor.id,
@@ -179,7 +179,7 @@ impl DhtNodeService {
         };
 
         let client = DhtNodeService::try_connect_node(&info.addr).await?;
-        let mut neighbor = neighbor.lock().await;
+        let mut neighbor = neighbor.write().await;
         if let Some(node) = neighbor.as_ref() {
             match NeighborType::from_i32(info.ty).unwrap() {
                 NeighborType::Previous => {
@@ -188,7 +188,6 @@ impl DhtNodeService {
                 NeighborType::Next => println!("Replacing next #{} with #{}", node.id, info.id),
             }
         }
-
         *neighbor = Some(Neighbor {
             id: info.id,
             addr: info.addr.clone(),
@@ -249,39 +248,50 @@ impl DhtNode for DhtNodeService {
 
         println!("Got request for key {}", key);
 
-        if let Some(next_neighbor) = self.neighbors.next.lock().await.as_mut() {
-            if !((self.id < next_neighbor.id && (self.id <= key && key < next_neighbor.id))
-                || (self.id > next_neighbor.id && (self.id <= key || key < next_neighbor.id)))
-            {
-                let mut prev_neighbor = self.neighbors.prev.lock().await;
-                let prev_neighbor = prev_neighbor.as_mut().ok_or(Error::Internal(format!(
-                    "Missing previous neighbor on node {}.",
-                    self.id
-                )))?;
+        let next_neighbor = self.neighbors.next.read().await;
 
-                let forwarding_neighbor = if HashRing::distance(key, next_neighbor.id)
-                    < HashRing::distance(key, prev_neighbor.id)
-                {
-                    next_neighbor
-                } else {
-                    prev_neighbor
-                };
-
-                println!(
-                    "Forwarding request for key {} to {}",
-                    key, forwarding_neighbor.id
-                );
-                return forwarding_neighbor.client.query_dht(request).await;
+        let is_node_key = match next_neighbor.as_ref() {
+            Some(next_neighbor) => {
+                (self.id < next_neighbor.id && (self.id <= key && key < next_neighbor.id))
+                    || (self.id > next_neighbor.id && (self.id <= key || key < next_neighbor.id))
             }
-        }
-
-        println!("Fulfilling request for key {}", key);
-        let result = self.execute_query(&req).await;
-        let query_result = QueryResult {
-            value: result.clone().ok().flatten(),
-            error: result.err().map(|e| e.to_string()),
+            None => true,
         };
 
-        Ok(Response::new(query_result))
+        if is_node_key {
+            println!("Fulfilling request for key {}", key);
+            let result = self.execute_query(&req).await;
+            let query_result = QueryResult {
+                value: result.clone().ok().flatten(),
+                error: result.err().map(|e| e.to_string()),
+            };
+
+            return Ok(Response::new(query_result));
+        }
+
+        let next_neighbor = next_neighbor.as_ref().ok_or(Error::Internal(format!(
+            "Missing next neighbor on node {}.",
+            self.id
+        )))?;
+
+        let prev_neighbor = self.neighbors.prev.read().await;
+        let prev_neighbor = prev_neighbor.as_ref().ok_or(Error::Internal(format!(
+            "Missing previous neighbor on node {}.",
+            self.id
+        )))?;
+
+        let forwarding_neighbor = if HashRing::distance(key, next_neighbor.id)
+            < HashRing::distance(key, prev_neighbor.id)
+        {
+            next_neighbor
+        } else {
+            prev_neighbor
+        };
+
+        println!(
+            "Forwarding request for key {} to {}",
+            key, forwarding_neighbor.id
+        );
+        forwarding_neighbor.client.clone().query_dht(request).await
     }
 }
