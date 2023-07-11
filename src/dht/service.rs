@@ -299,10 +299,7 @@ impl DhtNode for DhtNodeService {
         let next_neighbor = self.neighbors.next.read().await;
 
         let is_node_key = match next_neighbor.as_ref() {
-            Some(next_neighbor) => {
-                (self.id < next_neighbor.id && (self.id <= key && key < next_neighbor.id))
-                    || (self.id > next_neighbor.id && (self.id <= key || key < next_neighbor.id))
-            }
+            Some(next_neighbor) => HashRing::is_node_key(self.id, next_neighbor.id, key),
             None => true,
         };
 

@@ -37,4 +37,9 @@ impl HashRing {
             (u64::MAX - b) + a
         }
     }
+
+    pub fn is_node_key(id: u64, next_id: u64, key: u64) -> bool {
+        (id < next_id && (id <= key && key < next_id))
+            || (id > next_id && (id <= key || key < next_id))
+    }
 }
