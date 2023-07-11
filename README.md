@@ -55,14 +55,14 @@ Example request:
 This will make a SET Key:Value = 1:Ru1nnAfPu3Ya4v request to the DHT.
 
 ### TODO
-1. Split up QueryDHT into QueryDHT and ForwardQuery so you can have a key of type Vec<u8> be converted to u64 and then forwarded
-2. Transfer keys on node join
-3. Implement simple test binary to make requests to dht
-4. Handle node failures by removing from registry and fixing broken connections
-5. Remove registry, join network by providing the address of one node in the network
-6. Dockerize dht nodes & make script to easily spin up everything
-7. Use data replication to ensure fault tolerance
-8. Implement logging service to provide persistence to the dht
+- [x] Split up QueryDHT into QueryDHT and ForwardQuery so you can have a key of type Vec<u8> be converted to u64 and then forwarded
+- [x] Transfer keys on node join
+- [] Implement simple test binary to make requests to dht
+- [] Handle node failures by removing from registry and fixing broken connections
+- [] Remove registry, join network by providing the address of one node in the network
+- [] Dockerize dht nodes & make script to easily spin up everything
+- [] Use data replication to ensure fault tolerance
+- [] Implement logging service to provide persistence to the dht
 
 
 ### Motivation
