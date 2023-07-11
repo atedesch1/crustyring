@@ -327,16 +327,18 @@ impl DhtNode for DhtNodeService {
             self.id
         )))?;
 
-        let forwarding_neighbor = if HashRing::distance(key, next_neighbor.id)
-            < HashRing::distance(key, prev_neighbor.id)
+        // If counter_clockwise_distance from node to key
+        // < clockwise_distance from node to key
+        let forwarding_neighbor = if HashRing::counter_clockwise_distance(self.id, key)
+            < HashRing::counter_clockwise_distance(key, self.id)
         {
-            next_neighbor
-        } else {
             prev_neighbor
+        } else {
+            next_neighbor
         };
 
         info!(
-            "Forwarding request for key {} to #{:x}",
+            "Forwarding request for key {:x} to #{:x}",
             key, forwarding_neighbor.id
         );
         forwarding_neighbor
