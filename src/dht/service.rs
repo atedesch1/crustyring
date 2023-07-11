@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::error::{Error, Result};
+use crate::hash::generate_hash64;
 use crate::registry::REGISTRY_ADDR;
 use crate::rpc::registry::{ConnectionAddr, Node};
 use crate::HashRing;
@@ -15,7 +16,8 @@ use crate::rpc::registry::registry_client::RegistryClient;
 use crate::rpc::dht::dht_node_client::DhtNodeClient;
 use crate::rpc::dht::dht_node_server::DhtNode;
 use crate::rpc::dht::{
-    NeighborRegisterInfo, NeighborType, OperationType, PreviousNeighbors, Query, QueryResult,
+    EncodedQuery, NeighborRegisterInfo, NeighborType, OperationType, PreviousNeighbors, Query,
+    QueryResult,
 };
 
 use super::store::Store;
@@ -221,7 +223,7 @@ impl DhtNodeService {
         Ok(())
     }
 
-    pub async fn execute_query(&self, query: &Query) -> Result<Option<Vec<u8>>> {
+    pub async fn execute_query(&self, query: &EncodedQuery) -> Result<Option<Vec<u8>>> {
         let key = query.key.to_be_bytes();
 
         info!("Executing query for key {:x}.", query.key);
@@ -276,6 +278,20 @@ impl DhtNode for DhtNodeService {
     ) -> std::result::Result<Response<QueryResult>, Status> {
         let req = request.get_ref();
 
+        self.forward_query(Request::new(EncodedQuery {
+            ty: req.ty,
+            key: generate_hash64(&req.key)?,
+            value: req.value.clone(),
+        }))
+        .await
+    }
+
+    async fn forward_query(
+        &self,
+        request: Request<EncodedQuery>,
+    ) -> std::result::Result<Response<QueryResult>, Status> {
+        let req = request.get_ref();
+
         let key = req.key;
 
         info!("Received request for key {:x}", key);
@@ -323,6 +339,10 @@ impl DhtNode for DhtNodeService {
             "Forwarding request for key {} to #{:x}",
             key, forwarding_neighbor.id
         );
-        forwarding_neighbor.client.clone().query_dht(request).await
+        forwarding_neighbor
+            .client
+            .clone()
+            .forward_query(request)
+            .await
     }
 }

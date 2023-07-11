@@ -5,6 +5,7 @@ import "registry.proto";
 
 service DhtNode {
     rpc QueryDht(Query) returns (QueryResult);
+    rpc ForwardQuery(EncodedQuery) returns (QueryResult);
     rpc RegisterAsNeighbor(NeighborRegisterInfo) returns (PreviousNeighbors);
 }
 
@@ -31,6 +32,12 @@ enum OperationType {
 }
 
 message Query {
+  OperationType ty = 1;
+  bytes key = 2;
+  optional bytes value = 3;
+}
+
+message EncodedQuery {
   OperationType ty = 1;
   uint64 key = 2;
   optional bytes value = 3;
