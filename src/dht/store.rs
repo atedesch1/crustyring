@@ -1,10 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 
 use tokio::sync::RwLock;
 
+use crate::error::Result;
+
 #[derive(Debug)]
 pub struct Store {
-    store: RwLock<HashMap<Vec<u8>, Vec<u8>>>,
+    store: RwLock<HashMap<u64, Vec<u8>>>,
 }
 
 impl Store {
@@ -13,26 +15,39 @@ impl Store {
         Store { store }
     }
 
-    pub async fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+    pub async fn get(&self, key: &u64) -> Option<Vec<u8>> {
         let store = self.store.read().await;
         (*store).get(key).cloned()
     }
 
-    pub async fn set(&self, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
+    pub async fn set(&self, key: &u64, value: &[u8]) -> Option<Vec<u8>> {
         let mut store = self.store.write().await;
-        (*store).insert(key.into(), value.into())
+        (*store).insert(*key, value.into())
     }
 
-    pub async fn delete(&self, key: &[u8]) -> Option<Vec<u8>> {
+    pub async fn delete(&self, key: &u64) -> Option<Vec<u8>> {
         let mut store = self.store.write().await;
         (*store).remove(key)
     }
 
-    pub async fn list(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+    pub async fn list(&self) -> Vec<(u64, Vec<u8>)> {
         let store = self.store.read().await;
-        return (*store)
+        (*store)
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
+            .collect()
+    }
+
+    pub async fn get_entries_satisfy<F>(&self, f: F) -> Vec<(u64, Vec<u8>)>
+    where
+        F: Fn(u64) -> bool,
+    {
+        let store = self.store.read().await;
+
+        (*store)
+            .iter()
+            .filter(|(&ref key, _)| f(*key))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 }

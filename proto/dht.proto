@@ -7,6 +7,7 @@ service DhtNode {
     rpc QueryDht(Query) returns (QueryResult);
     rpc ForwardQuery(EncodedQuery) returns (QueryResult);
     rpc RegisterAsNeighbor(NeighborRegisterInfo) returns (PreviousNeighbors);
+    rpc TransferKeys(NodeId) returns (stream KeyValueEntry);
 }
 
 enum NeighborType {
@@ -46,4 +47,13 @@ message EncodedQuery {
 message QueryResult {
     optional string error = 1;
     optional bytes value = 2;
+}
+
+message NodeId {
+    uint64 id = 1;
+}
+
+message KeyValueEntry {
+    uint64 key = 1;
+    bytes value = 2;
 }

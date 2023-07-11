@@ -7,7 +7,8 @@ use crate::rpc::registry::{ConnectionAddr, Node};
 use crate::HashRing;
 
 use log::{info, warn};
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, RwLock};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Response, Status};
 
@@ -16,8 +17,8 @@ use crate::rpc::registry::registry_client::RegistryClient;
 use crate::rpc::dht::dht_node_client::DhtNodeClient;
 use crate::rpc::dht::dht_node_server::DhtNode;
 use crate::rpc::dht::{
-    EncodedQuery, NeighborRegisterInfo, NeighborType, OperationType, PreviousNeighbors, Query,
-    QueryResult,
+    EncodedQuery, KeyValueEntry, NeighborRegisterInfo, NeighborType, NodeId, OperationType,
+    PreviousNeighbors, Query, QueryResult,
 };
 
 use super::store::Store;
@@ -40,7 +41,7 @@ pub struct DhtNodeService {
     id: u64,
     addr: String,
 
-    store: Store,
+    store: Arc<Store>,
     neighbors: Arc<NeighborConnections>,
 
     registry: RegistryClient<Channel>,
@@ -66,15 +67,16 @@ impl DhtNodeService {
             next: RwLock::new(None),
         });
 
+        let store = Arc::new(Store::new());
+
         if let Some(neighbor) = node_info.neighbor {
-            tokio::spawn(Self::connect_to_neighbors(
+            tokio::spawn(Self::setup_connections(
                 node.clone(),
+                store.clone(),
                 neighbors.clone(),
                 neighbor,
             ));
         }
-
-        let store = Store::new();
 
         Ok(DhtNodeService {
             id: node.id,
@@ -133,18 +135,50 @@ impl DhtNodeService {
         })
     }
 
-    pub async fn connect_to_neighbors(
+    pub async fn setup_connections(
         node: Node,
+        store: Arc<Store>,
         neighbors: Arc<NeighborConnections>,
         prev_neighbor: Node,
+    ) -> Result<()> {
+        Self::connect_to_neighbors(&node, &neighbors, &prev_neighbor).await?;
+        Self::get_keys_from_neighbor(&node, &neighbors, &store).await?;
+        Ok(())
+    }
+
+    pub async fn connect_to_neighbors(
+        node: &Node,
+        neighbors: &Arc<NeighborConnections>,
+        prev_neighbor: &Node,
     ) -> Result<()> {
         let previous_neighbors =
             Self::register_on_neighbor(&node, &neighbors, &prev_neighbor, NeighborType::Next)
                 .await?;
-        let next_neighbor = previous_neighbors.next.unwrap_or(prev_neighbor);
+        let next_neighbor = previous_neighbors.next.unwrap_or(prev_neighbor.clone());
         let _ =
             Self::register_on_neighbor(&node, &neighbors, &next_neighbor, NeighborType::Previous)
                 .await?;
+        Ok(())
+    }
+
+    pub async fn get_keys_from_neighbor(
+        node: &Node,
+        neighbors: &Arc<NeighborConnections>,
+        store: &Arc<Store>,
+    ) -> Result<()> {
+        let prev_neighbor = neighbors.prev.read().await;
+        if let Some(prev_neighbor) = (*prev_neighbor).as_ref() {
+            let mut stream = prev_neighbor
+                .client
+                .clone()
+                .transfer_keys(Request::new(NodeId { id: node.id }))
+                .await?
+                .into_inner();
+
+            while let Some(kv_entry) = stream.message().await? {
+                store.set(&kv_entry.key, &kv_entry.value).await;
+            }
+        }
         Ok(())
     }
 
@@ -224,7 +258,7 @@ impl DhtNodeService {
     }
 
     pub async fn execute_query(&self, query: &EncodedQuery) -> Result<Option<Vec<u8>>> {
-        let key = query.key.to_be_bytes();
+        let key = query.key;
 
         info!("Executing query for key {:x}.", query.key);
 
@@ -343,5 +377,30 @@ impl DhtNode for DhtNodeService {
             .clone()
             .forward_query(request)
             .await
+    }
+
+    type TransferKeysStream = ReceiverStream<std::result::Result<KeyValueEntry, Status>>;
+
+    async fn transfer_keys(
+        &self,
+        request: Request<NodeId>,
+    ) -> std::result::Result<Response<Self::TransferKeysStream>, Status> {
+        let prev_id = self.id.clone();
+        let id = request.get_ref().id;
+
+        let (tx, rx) = mpsc::channel(100);
+
+        let store = self.store.clone();
+        tokio::spawn(async move {
+            let is_node_key = |key: u64| !HashRing::is_node_key(prev_id, id, key);
+            let entries = store.get_entries_satisfy(is_node_key).await;
+            info!("Transferring keys to {:x}", request.get_ref().id);
+            for (key, value) in entries {
+                store.delete(&key).await;
+                tx.send(Ok(KeyValueEntry { key, value })).await.unwrap();
+            }
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
