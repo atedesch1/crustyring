@@ -35,29 +35,31 @@ cargo run --bin=registry
 ```
 This spawns the registry service listening on port 50000, make sure to not use this port for the DHT nodes.
 
-Finally, spin up how many DHT nodes you like by supplying a port (usually 50001, 50002, ...):
+Then, spin up how many DHT nodes you like by supplying a port (usually 50001, 50002, ...):
 ```
 cargo run --bin=dht <port>
 ```
-### Making Requests
-Use a service that can make gRPC requests such as Postman or build your own. 
+### Querying the DHT
 
-Make requests to the DHT by suppliying proto/dht.proto file to Postman and using QueryDHT request on a running node.
+You can either use the provided DHT client binary to query the DHT through a simple CLI application or you can use a service such as Postman by supplying the proto/dht.proto file.
 
-Example request:
+#### DHT Client
+
+First, spin up the DHT CLI Client:
 ```
-{
-    "ty": "Set",               # Get, Set, Delete
-    "key": "1",                # 0 to 2^64 - 1
-    "value": "Ru1nnAfPu3Ya4v"  # Optional<Any>
-}
+cargo run --bin=client
 ```
-This will make a SET Key:Value = 1:Ru1nnAfPu3Ya4v request to the DHT.
+Then, provide either a Get, Set or Delete command to the CLI:
+```
+<command> <key> <value>  # Example: SET 777 abc
+```
+For each command given the client will pick a random DHT node in the network to make the request to and respond appropriately.
+
 
 ### TODO
 - [x] Split up QueryDHT into QueryDHT and ForwardQuery so you can have a key of type Vec<u8> be converted to u64 and then forwarded
 - [x] Transfer keys on node join
-- [ ] Implement simple test binary to make requests to dht
+- [x] Implement simple test binary to make requests to dht
 - [ ] Handle node failures by removing from registry and fixing broken connections
 - [ ] Remove registry, join network by providing the address of one node in the network
 - [ ] Dockerize dht nodes & make script to easily spin up everything
