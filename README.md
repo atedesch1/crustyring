@@ -1,4 +1,5 @@
 # Crusty Ring
+
 Crusty Ring is a simple Distributed Hash Table (DHT) implementation using Consistent Hashing.
 
 - Hash ring has positions ranging from 0 to u64::MAX (2^64 - 1).
@@ -39,7 +40,8 @@ Then, spin up how many DHT nodes you like by supplying a port (usually 50001, 50
 ```
 cargo run --bin=dht <port>
 ```
-### Querying the DHT
+
+## Querying the DHT
 
 You can either use the provided DHT client binary to query the DHT through a simple CLI application or you can use a service such as Postman by supplying the proto/dht.proto file.
 
@@ -57,6 +59,7 @@ For each command given the client will pick a random DHT node in the network to 
 
 
 ### TODO
+
 - [x] Split up QueryDHT into QueryDHT and ForwardQuery so you can have a key of type Vec<u8> be converted to u64 and then forwarded
 - [x] Transfer keys on node join
 - [x] Implement simple test binary to make requests to dht
@@ -68,4 +71,5 @@ For each command given the client will pick a random DHT node in the network to 
 
 
 ### Motivation
+
 This DHT implementation is a study project that serves as the initial steps for my Bachelor thesis "A Pastry based distributed database using Rust".
