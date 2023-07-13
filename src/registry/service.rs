@@ -1,10 +1,14 @@
-use log::info;
+use crate::error::{Error, Result};
+use crate::registry::REGISTRY_ADDR;
+use crate::rpc::registry::registry_client::RegistryClient;
+use log::{info, warn};
 use std::sync::Arc;
+use tonic::transport::Channel;
 use tonic::{Request, Response, Status};
 
 use super::manager::Manager;
 use crate::rpc::registry::registry_server::Registry;
-use crate::rpc::registry::{ConnectionAddr, Node, RegisterInfo};
+use crate::rpc::registry::{ConnectionAddr, Node, Nodes, RegisterInfo};
 
 #[derive(Debug)]
 pub struct RegistryService {
@@ -16,6 +20,26 @@ impl RegistryService {
         RegistryService {
             manager: Arc::new(Manager::new()),
         }
+    }
+
+    pub async fn try_connect_registry() -> Result<RegistryClient<Channel>> {
+        info!("Connecting to registry...");
+        for attempt in 1..=5 {
+            match RegistryClient::connect("http://".to_owned() + REGISTRY_ADDR).await {
+                Ok(client) => {
+                    info!("Connected to registry.");
+                    return Ok(client);
+                }
+                Err(_) => {
+                    warn!(
+                        "Connection to registry attempt {} failed. Retrying in 5 seconds...",
+                        attempt
+                    );
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                }
+            }
+        }
+        Err(Error::Internal("Connection to registry failed.".into()))
     }
 }
 
@@ -38,5 +62,22 @@ impl Registry for RegistryService {
         });
 
         Ok(Response::new(RegisterInfo { id, neighbor }))
+    }
+
+    async fn get_connected_nodes(
+        &self,
+        _request: Request<()>,
+    ) -> std::result::Result<Response<Nodes>, Status> {
+        let nodes = self
+            .manager
+            .get_nodes()?
+            .iter()
+            .map(|node| Node {
+                id: node.id,
+                addr: node.addr.clone(),
+            })
+            .collect();
+
+        Ok(Response::new(Nodes { nodes }))
     }
 }

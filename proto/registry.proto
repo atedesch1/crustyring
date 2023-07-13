@@ -1,12 +1,18 @@
 syntax = "proto3";
+import "google/protobuf/empty.proto";
 package registry;
 
 service Registry {
     rpc RegisterNode(ConnectionAddr) returns (RegisterInfo);
+    rpc GetConnectedNodes(google.protobuf.Empty) returns (Nodes);
 }
 
 message ConnectionAddr {
     string addr = 1;
+}
+
+message Nodes {
+    repeated Node nodes = 1;
 }
 
 message Node {

@@ -43,4 +43,8 @@ impl Manager {
 
         Ok(result)
     }
+
+    pub fn get_nodes(&self) -> Result<Vec<NodeInfo>> {
+        Ok(self.nodes.lock()?.clone())
+    }
 }

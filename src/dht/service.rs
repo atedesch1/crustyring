@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use crate::error::{Error, Result};
 use crate::hash::generate_hash64;
-use crate::registry::REGISTRY_ADDR;
+use crate::registry::service::RegistryService;
 use crate::rpc::registry::{ConnectionAddr, Node};
 use crate::HashRing;
 
-use log::{info, warn};
+use log::info;
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
@@ -49,7 +49,7 @@ pub struct DhtNodeService {
 
 impl DhtNodeService {
     pub async fn new(addr: String) -> Result<Self> {
-        let mut registry = Self::try_connect_registry().await?;
+        let mut registry = RegistryService::try_connect_registry().await?;
 
         info!("Registering on registry...");
         let node_info = registry
@@ -87,27 +87,7 @@ impl DhtNodeService {
         })
     }
 
-    async fn try_connect_registry() -> Result<RegistryClient<Channel>> {
-        info!("Connecting to registry...");
-        for attempt in 1..=5 {
-            match RegistryClient::connect("http://".to_owned() + REGISTRY_ADDR).await {
-                Ok(client) => {
-                    info!("Connected to registry.");
-                    return Ok(client);
-                }
-                Err(_) => {
-                    warn!(
-                        "Connection to registry attempt {} failed. Retrying in 5 seconds...",
-                        attempt
-                    );
-                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                }
-            }
-        }
-        Err(Error::Internal("Connection to registry failed.".into()))
-    }
-
-    async fn try_connect_node(node: &Node) -> Result<DhtNodeClient<Channel>> {
+    pub async fn try_connect_node(node: &Node) -> Result<DhtNodeClient<Channel>> {
         info!("Connecting to node #{:x}...", node.id);
         for attempt in 1..=5 {
             match DhtNodeClient::connect("http://".to_owned() + &node.addr).await {
