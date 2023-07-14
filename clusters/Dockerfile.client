@@ -1,0 +1,32 @@
+FROM rust:latest as builder
+
+WORKDIR /app
+
+# Install Protocol Buffers
+RUN apt-get update && \
+    apt-get install -y protobuf-compiler libprotobuf-dev
+
+# Install dependencies
+COPY ./Cargo.toml ./Cargo.lock ./
+RUN mv ./Cargo.toml toml.txt && \
+    sed -E '/\[\[bin\]\]/{N;N;d;}' ./toml.txt > Cargo.toml && \
+    mkdir src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build --release
+
+COPY . ./
+
+RUN cargo build --release --bin=client
+
+FROM debian:buster-slim
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y protobuf-compiler libprotobuf-dev
+
+COPY --from=builder /app/target/release/client .
+
+ENV REGISTRY_HOSTNAME=registry
+
+ENTRYPOINT ["./client"]
