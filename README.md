@@ -21,38 +21,60 @@ DHT nodes are responsible for storing keys in the DHT ranging from their ID to t
 
 Any of them can serve requests to the DHT. If the key in the request is not present in the current node, the node forwards the request to its neighbor that is closest to the key. 
 
-## Running DHT
-In order to run the DHT you must first compile the project using cargo in the root of the project.
+## Running the DHT
+
+### Docker
+
+Requirements:
+- docker
+- docker-compose
+
+In order to run the DHT with docker you must first build the images. 
+
+To build and run the registry and DHT node images run inside the root directory:
+```bash
+docker-compose -f clusters/docker-compose.yml up --build
 ```
-cargo build
+
+### Local
+
+In order to run the DHT you must first compile the project using cargo in the root of the project.
+```bash
+cargo build --release
 ```
 This will build the binaries for the registry service and dht nodes.
 
-### Initializing DHT
-
 Next, you must spin up the registry service:
-```
-cargo run --bin=registry
+```bash
+./target/release/registry
 ```
 This spawns the registry service listening on port 50000, make sure to not use this port for the DHT nodes.
 
 Then, spin up how many DHT nodes you like by supplying a port (usually 50001, 50002, ...):
-```
-cargo run --bin=dht <port>
+```bash
+./target/release/dht <port>
 ```
 
 ## Querying the DHT
 
-You can either use the provided DHT client binary to query the DHT through a simple CLI application or you can use a service such as Postman by supplying the proto/dht.proto file.
+You can either use the provided DHT client binary to query the DHT through a simple CLI application or you can use a service such as Postman by supplying the proto/dht.proto file. We will use the DHT client:
 
-#### DHT Client
+### Docker
 
-First, spin up the DHT CLI Client:
+To build and run the client image run inside the root directory (run after the dht has initialized):
+```bash
+docker build -t client:latest -f clusters/Dockerfile.client .
+docker run --network=dht -it client:latest
 ```
-cargo run --bin=client
+### Local
+
+Spin up the DHT CLI Client:
+```bash
+./target/release/client
 ```
-Then, provide either a Get, Set or Delete command to the CLI:
-```
+
+Either local or with docker, to query the DHT provide a Get, Set or Delete command to the CLI:
+```bash
 <command> <key> <value>  # Example: SET 777 abc
 ```
 For each command given the client will pick a random DHT node in the network to make the request to and respond appropriately.
@@ -63,9 +85,11 @@ For each command given the client will pick a random DHT node in the network to 
 - [x] Split up QueryDHT into QueryDHT and ForwardQuery so you can have a key of type Vec<u8> be converted to u64 and then forwarded
 - [x] Transfer keys on node join
 - [x] Implement simple test binary to make requests to dht
+- [x] Dockerize dht nodes & make script to easily spin up everything
+- [ ] Write automated tests for the dht as a whole
+- [ ] Handle simultaneous node joins?
 - [ ] Handle node failures by removing from registry and fixing broken connections
 - [ ] Remove registry, join network by providing the address of one node in the network
-- [ ] Dockerize dht nodes & make script to easily spin up everything
 - [ ] Use data replication to ensure fault tolerance
 - [ ] Implement logging service to provide persistence to the dht
 
