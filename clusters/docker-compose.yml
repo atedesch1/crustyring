@@ -1,20 +1,22 @@
-version: "3"
+version: "3.8"
 
 networks:
   dht:
+    name: "dht"
     driver: bridge
+    attachable: true
 
 services:
   registry:
     build:
       context: ../
       dockerfile: clusters/Dockerfile.registry
-    ports:
-      - "50000:50000"
     environment:
       - REGISTRY_HOSTNAME=registry
+    networks:
+      - dht
   
-  dht1:
+  dht-node-1:
     build:
       context: ../
       dockerfile: clusters/Dockerfile.dht
@@ -22,20 +24,63 @@ services:
       - registry
     environment:
       - REGISTRY_HOSTNAME=registry
-      - NODE_HOSTNAME=dht1
-    ports:
-      - "50001:50001"
+      - NODE_HOSTNAME=dht-node-1
+    networks:
+      - dht
     command: "50001"
 
-  dht2:
+  dht-node-2:
     build:
       context: ../
       dockerfile: clusters/Dockerfile.dht
     depends_on:
       - registry
+      - dht-node-1
     environment:
       - REGISTRY_HOSTNAME=registry
-      - NODE_HOSTNAME=dht2
-    ports:
-      - "50002:50002"
+      - NODE_HOSTNAME=dht-node-2
+    networks:
+      - dht
     command: "50002"
+
+  dht-node-3:
+    build:
+      context: ../
+      dockerfile: clusters/Dockerfile.dht
+    depends_on:
+      - registry
+      - dht-node-2
+    environment:
+      - REGISTRY_HOSTNAME=registry
+      - NODE_HOSTNAME=dht-node-3
+    networks:
+      - dht
+    command: "50003"
+
+  dht-node-4:
+    build:
+      context: ../
+      dockerfile: clusters/Dockerfile.dht
+    depends_on:
+      - registry
+      - dht-node-3
+    environment:
+      - REGISTRY_HOSTNAME=registry
+      - NODE_HOSTNAME=dht-node-4
+    networks:
+      - dht
+    command: "50004"
+
+  dht-node-5:
+    build:
+      context: ../
+      dockerfile: clusters/Dockerfile.dht
+    depends_on:
+      - registry
+      - dht-node-4
+    environment:
+      - REGISTRY_HOSTNAME=registry
+      - NODE_HOSTNAME=dht-node-5
+    networks:
+      - dht
+    command: "50005"
