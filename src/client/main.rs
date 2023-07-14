@@ -2,14 +2,13 @@ use crustyring::error::Result;
 
 use crustyring::dht::service::DhtNodeService;
 
-use crustyring::registry::service::RegistryService;
 use crustyring::rpc::dht::{OperationType, Query};
 use rand::Rng;
 use tonic::Request;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut registry_client = RegistryService::try_connect_registry().await?;
+    let mut registry_client = DhtNodeService::try_connect_registry().await?;
 
     loop {
         print!("> ");

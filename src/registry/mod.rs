@@ -1,4 +1,4 @@
 pub mod manager;
 pub mod service;
 
-pub const REGISTRY_ADDR: &str = "[::1]:50000";
+pub const REGISTRY_PORT: u32 = 50000;

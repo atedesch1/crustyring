@@ -17,10 +17,13 @@ async fn main() -> Result<()> {
 
     env_logger::init();
 
-    let addr: SocketAddr = format!("[::1]:{}", port).parse()?;
-    let service = DhtNodeService::new(addr.to_string()).await?;
-    info!("Initializing node on {}", addr);
+    let hostname = std::env::var("NODE_HOSTNAME").unwrap_or("0.0.0.0".to_owned());
+    let public_addr = format!("http://{}:{}", hostname, port);
 
+    info!("Initializing node on {}", public_addr);
+    let service = DhtNodeService::new(public_addr).await?;
+    let addr: SocketAddr = format!("0.0.0.0:{}", port).parse()?;
+    
     Server::builder()
         .add_service(DhtNodeServer::new(service))
         .serve(addr)
