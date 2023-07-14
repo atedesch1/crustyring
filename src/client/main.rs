@@ -8,7 +8,11 @@ use tonic::Request;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
+
     let mut registry_client = DhtNodeService::try_connect_registry().await?;
+
+    println!("Enter DHT query (Get, Set or Delete).\n  Type exit to quit.");
 
     loop {
         print!("> ");
@@ -28,6 +32,10 @@ async fn main() -> Result<()> {
 
         match &operation[..] {
             "SET" => {
+                if words.len() < 3 {
+                    println!("You must provide key and value for SET query.");
+                    continue
+                }
                 let key = words[1].to_string();
                 let value = words[2].to_string();
                 let request = Request::new(Query {
@@ -51,6 +59,10 @@ async fn main() -> Result<()> {
                 }
             }
             "DELETE" => {
+                if words.len() < 2 {
+                    println!("You must provide a key for DELETE query.");
+                    continue
+                }
                 let key = words[1].to_string();
                 let request = Request::new(Query {
                     ty: OperationType::Delete.into(),
@@ -75,6 +87,10 @@ async fn main() -> Result<()> {
                 }
             }
             "GET" => {
+                if words.len() < 2 {
+                    println!("You must provide a key for GET query.");
+                    continue
+                }
                 let key = words[1].to_string();
                 let request = Request::new(Query {
                     ty: OperationType::Get.into(),
