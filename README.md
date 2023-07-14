@@ -29,8 +29,6 @@ Requirements:
 - docker
 - docker-compose
 
-In order to run the DHT with docker you must first build the images. 
-
 To build and run the registry and DHT node images run inside the root directory:
 ```bash
 docker-compose -f clusters/docker-compose.yml up --build
