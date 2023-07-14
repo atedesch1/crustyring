@@ -1,0 +1,41 @@
+version: "3"
+
+networks:
+  dht:
+    driver: bridge
+
+services:
+  registry:
+    build:
+      context: ../
+      dockerfile: clusters/Dockerfile.registry
+    ports:
+      - "50000:50000"
+    environment:
+      - REGISTRY_HOSTNAME=registry
+  
+  dht1:
+    build:
+      context: ../
+      dockerfile: clusters/Dockerfile.dht
+    depends_on:
+      - registry
+    environment:
+      - REGISTRY_HOSTNAME=registry
+      - NODE_HOSTNAME=dht1
+    ports:
+      - "50001:50001"
+    command: "50001"
+
+  dht2:
+    build:
+      context: ../
+      dockerfile: clusters/Dockerfile.dht
+    depends_on:
+      - registry
+    environment:
+      - REGISTRY_HOSTNAME=registry
+      - NODE_HOSTNAME=dht2
+    ports:
+      - "50002:50002"
+    command: "50002"
