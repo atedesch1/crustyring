@@ -1,6 +1,5 @@
 syntax = "proto3";
 package dht;
-import "google/protobuf/empty.proto";
 import "registry.proto";
 
 service DhtNode {
